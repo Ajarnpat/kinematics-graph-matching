@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Graph matching</title>
+  <style>
+    :root {
+      --border:#bfbfbf;
+      --shade:#f3f3f3;
+      --muted:#666;
+    }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;margin:0;background:#fff;color:#111;}
+    header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);}
+    h1{margin:0 0 .25rem;font-size:1.5rem;}
+    .instructions{margin:.25rem 0 0;color:#333;}
+    .statusbar{margin-top:.5rem;font-weight:600;}
+
+    main{max-width:1100px;margin:0 auto;padding:1rem 1.25rem 2rem;}
+
+    table{width:100%;border-collapse:collapse;border:1px solid var(--border);}    
+    th, td{border:1px solid var(--border);padding:.6rem .5rem;vertical-align:top;}
+    thead th{background:#eee;text-align:left;}
+    tbody tr:nth-child(odd){background:var(--shade);}    
+
+    button{border:1px solid var(--border);background:#fff;border-radius:.5rem;padding:.45rem .7rem;cursor:pointer}
+    button:hover{background:#fafafa}
+    button:disabled{opacity:.6;cursor:not-allowed}
+
+    select{width:4rem;padding:.3rem;border-radius:.375rem;border:1px solid var(--border);}
+
+    .score{font-weight:700}
+
+    .graphs{margin-top:1.25rem}
+    .graphs img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:.5rem}
+
+    .suball{display:flex;justify-content:flex-end;margin:.75rem 0 1rem}
+
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Graph matching</h1>
+    <p class="instructions">Enter <strong>A, B, C</strong> or <strong>D</strong> in each box. Submit answers <em>one row at a time</em> or use “Submit all rows”. You’ll see a score out of 3 for each row.</p>
+    <div class="statusbar" id="status">Rows complete: 0/5 &nbsp;|&nbsp; Attempts: 0</div>
+  </header>
+
+  <main>
+    <div class="suball">
+      <button id="submitAllBtn" type="button">Submit all rows</button>
+    </div>
+
+    <table id="activity">
+      <thead>
+        <tr>
+          <th style="width:42%">Motion</th>
+          <th>displacement vs time graph</th>
+          <th>velocity vs time graph</th>
+          <th>acceleration vs time graph</th>
+          <th style="width:8rem">Row result</th>
+          <th style="width:12rem">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
+    <section class="graphs" aria-labelledby="graphs-label">
+      <h2 id="graphs-label" class="sr-only">Graphs to choose from (A–D)</h2>
+      <img src="graphs_to_choose_from.JPG" alt="Graphs labeled A, B, C, D to choose from"/>
+    </section>
+  </main>
+
+  <script>
+    const ROWS = [
+      {id:1,motion:"Dropping a ball, from rest",answer:{disp:"C",vel:"A",acc:"B"}},
+      {id:2,motion:"Dropping a paper cone, released from overhead, timed from chest level down",answer:{disp:"A",vel:"B",acc:"D"}},
+      {id:3,motion:"Releasing a primed race-car, timed from moment of release, for the first 0.5 s of motion",answer:{disp:"C",vel:"A",acc:"B"}},
+      {id:4,motion:"Low-friction trolley, from moment after pushed, until before it hits anything",answer:{disp:"A",vel:"B",acc:"D"}},
+      {id:5,motion:"Chain, hanging over bench (ready to drop), from moment of release until it has just lost contact with table",answer:{disp:"C",vel:"C",acc:"A"}},
+    ];
+
+    const STORAGE_KEY = "graph-matching-v2";
+    let state = { rows:{}, attemptsGlobal:0 };
+
+    function defaultRowState(){return{sel:{disp:"",vel:"",acc:""},score:0,attempts:0,locked:false};}
+
+    function loadState(){
+      try{
+        const raw=localStorage.getItem(STORAGE_KEY);
+        if(raw){state=JSON.parse(raw);}else{ROWS.forEach(r=>state.rows[r.id]=defaultRowState());}
+      }catch(e){ROWS.forEach(r=>state.rows[r.id]=defaultRowState());}
+    }
+    function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+
+    function makeSelect(rowId,key){
+      const s=document.createElement('select');
+      ['','A','B','C','D'].forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v||'—';s.appendChild(o);});
+      s.addEventListener('change',()=>{if(state.rows[rowId].locked){s.value=state.rows[rowId].sel[key]||'';return;}state.rows[rowId].sel[key]=s.value.toUpperCase();saveState();});
+      return s;
+    }
+
+    function buildTable(){
+      const tbody=document.getElementById('tbody');tbody.innerHTML='';
+      ROWS.forEach(row=>{
+        if(!state.rows[row.id]) state.rows[row.id]=defaultRowState();
+        const tr=document.createElement('tr');
+        const tdMotion=document.createElement('td');tdMotion.textContent=`${row.id}. ${row.motion}`;tr.appendChild(tdMotion);
+        ['disp','vel','acc'].forEach(key=>{const td=document.createElement('td');const s=makeSelect(row.id,key);s.value=state.rows[row.id].sel[key]||'';if(state.rows[row.id].locked) s.disabled=true;td.appendChild(s);tr.appendChild(td);});
+        const tdResult=document.createElement('td');const score=document.createElement('div');score.id=`score-${row.id}`;score.className='score';score.textContent=`${state.rows[row.id].score} / 3`;const attempts=document.createElement('div');attempts.id=`attempts-${row.id}`;attempts.className='muted';attempts.textContent=`(attempts: ${state.rows[row.id].attempts||0})`;tdResult.appendChild(score);tdResult.appendChild(attempts);tr.appendChild(tdResult);
+        const tdActions=document.createElement('td');const btn=document.createElement('button');btn.type='button';btn.id=`submit-${row.id}`;btn.textContent=state.rows[row.id].locked?'Locked':'Submit row';btn.disabled=!!state.rows[row.id].locked;btn.addEventListener('click',()=>submitRow(row.id));tdActions.appendChild(btn);tr.appendChild(tdActions);
+        tbody.appendChild(tr);
+      });
+      refreshStatus();
+    }
+
+    function allFilled(sel){return sel.disp&&sel.vel&&sel.acc;}
+
+    function submitRow(id){
+      const row=ROWS.find(r=>r.id===id);const st=state.rows[id];if(st.locked)return;if(!allFilled(st.sel)){alert('Please choose A, B, C or D for all three cells in this row before submitting.');return;}
+      let score=0;['disp','vel','acc'].forEach(k=>{if(st.sel[k].toUpperCase()===row.answer[k])score+=1;});
+      st.score=score;st.attempts=(st.attempts||0)+1;state.attemptsGlobal+=1;
+      if(score===3){st.locked=true;}
+      saveState();applyFeedback(id);refreshStatus();
+    }
+
+    function applyFeedback(id){
+      const st=state.rows[id];const scoreEl=document.getElementById(`score-${id}`);if(scoreEl)scoreEl.textContent=`${st.score} / 3`;
+      const attEl=document.getElementById(`attempts-${id}`);if(attEl)attEl.textContent=`(attempts: ${st.attempts||0})`;
+      const btn=document.getElementById(`submit-${id}`);if(btn){btn.textContent=st.locked?'Locked':'Submit row';btn.disabled=!!st.locked;}
+      const rowEl=btn?.closest('tr');if(rowEl){rowEl.querySelectorAll('select').forEach(s=>s.disabled=!!st.locked);}
+    }
+
+    function refreshStatus(){const completed=Object.values(state.rows).filter(r=>r.locked).length;document.getElementById('status').textContent=`Rows complete: ${completed}/${ROWS.length} | Attempts: ${state.attemptsGlobal}`;}
+
+    function submitAll(){let didAny=false;ROWS.forEach(r=>{const st=state.rows[r.id];if(!st.locked&&allFilled(st.sel)){submitRow(r.id);didAny=true;}});if(!didAny){alert('No rows ready to submit. Make sure each row has A/B/C/D selected in all three cells.');}}
+
+    loadState();buildTable();document.getElementById('submitAllBtn').addEventListener('click',submitAll);
+  </script>
+</body>
+</html>
